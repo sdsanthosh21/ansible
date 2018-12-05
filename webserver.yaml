@@ -1,0 +1,65 @@
+--- # Jboss Webserver deployment
+- hosts: '{{ runclient }}'
+  become: yes
+  become_method: sudo
+  remote_user: ansible
+  gather_facts: yes
+  connection: ssh
+  vars:
+    doc_root: /poc
+    server_root: /usr/websrv/jbcs-httpd24-2.4/httpd
+    ssh_config: ssh_{{ ansible_hostname }}
+    Project_Name: LGAEWeb
+    job_name: '{{ Project_Name }}_{{ ansible_hostname }}'
+    jenkins_server: svl-jbuild-p1
+  pre_tasks:
+  - name: update webserver IP
+    raw: 'echo "jb_webserver_ip: {{ ansible_default_ipv4.address }}" > /etc/ansible/playbooks/LA/vars/webserverip.yml'
+    delegate_to: localhost
+  tasks:
+  - name: Creates the directory and set the file permission and ownership
+    file:
+      path: '{{ doc_root }}'
+      state: directory
+      mode: 0755
+      owner: apache
+      group: apache
+  - name: Create the sub directory
+    file:
+      path: '{{ doc_root }}/lgae'
+      state: directory
+      mode: 0755
+      owner: apache
+      group: apache
+  - name: Updating configuration file httpd.conf
+    template:
+      src: /etc/ansible/playbooks/LA/templates/httpd.conf.erb
+      dest: '{{ server_root }}/conf/httpd.conf'
+      backup: yes
+  - name: Configuring mod_cluster
+    template:
+      src: /etc/ansible/playbooks/LA/templates/mod_cluster.conf.erb
+      dest: '{{ server_root }}/conf.d/mod_cluster.conf'
+      backup: yes
+  - name: Set the Config.xml file for jenkins to create a job
+    template:
+      src: /etc/ansible/playbooks/LA/templates/config.xml.erb
+      dest: /tmp/config.xml
+      backup: yes
+  - name: Set the ssh_config_setup for jenkins
+    template:
+      src: /etc/ansible/playbooks/LA/templates/ssh_config_setup.erb
+      dest: /tmp/ssh_config_setup
+      backup: yes
+  - name: Create the job in jenkins
+    template:
+      src: /etc/ansible/playbooks/LA/templates/create_job.sh.erb
+      dest: /tmp/create_job.sh
+      backup: yes
+  - name: Execute the script on the server
+    command: sh /tmp/create_job.sh
+  - name: Start the httpd service
+    shell: /usr/websrv/jbcs-httpd24-2.4/httpd/sbin/apachectl start
+ 
+
+
